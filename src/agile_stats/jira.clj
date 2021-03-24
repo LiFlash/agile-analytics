@@ -1,18 +1,20 @@
 (ns agile-stats.jira
-  (:require [agile-stats.configs :refer [base-url query-url status-categories]]
+  (:require [agile-stats.configs :refer [status-categories]]
             [agile-stats.db
              :refer
-             [histogram->csv persist-issues load-db read-issue-edn sprints->csv]]
+             [histogram->csv load-db persist-issues sprints->csv]]
             [agile-stats.issue
              :refer
              [finished-issues group-by-sprints update-issue-stats]]
             [agile-stats.metrics
              :refer
              [ct-histogram cycle-time-stats status-time-stats]]
-            [agile-stats.utils :refer [cleanup-map vec->map]]
+            [agile-stats.utils :refer [apply-to-vals cleanup-map vec->map]]
             [clj-http.client :as client]
             [clojure.data.csv :as csv]
             [java-time :as t]))
+
+(def jql-query "search?jql=")
 
 (defn jira-get [query]
 ;  (println query)
@@ -85,8 +87,7 @@
        :transitions (->> issue :key jira-changelog transition-entries (sort-by :date t/before?))}))
 
 (defn get-issues [query & [update-date]]
-  (let [issues (jira-paginate (str query-url
-                                   query
+  (let [issues (jira-paginate (str query
                                    (and update-date (str " and status was not done before " (t/format "YYYY-MM-dd" update-date)))
                                    "&fields=created,status" ))]
     (->> issues
@@ -94,32 +95,35 @@
          (map (partial update-issue-stats status-categories)))))
 
 (defn update-issue-db [configs]
-  (let [{:keys [update-query update-date]} configs
-        {:keys [issues last-update-date]} (load-db configs)
+  (let [{:keys [base-url issue-query update-date]} configs
+        {:keys [issues last-update-date] :as db} (load-db configs)
         change-date (if (:renew-db configs) update-date (or last-update-date update-date))
         issues (into (or issues {})
-                     (-> update-query
+                     (-> (str base-url jql-query issue-query)
                          (get-issues (when change-date (t/minus change-date (t/days 1))))
                          (vec->map :key)))]
     (persist-issues configs issues)
-    (vals issues)))
+    db))
 
 ;(def ds-issues (update-issue-db ds))
 ;(def cch-issues (update-issue-db cch))
 
 (defn update-stats [configs]
   (let [{:keys [sprint-end-date sprint-length nr-sprints stats-file]} configs
-        issues (update-issue-db configs)
+        issues (-> configs
+                   update-issue-db
+                   :issues
+                   vals)
         finished (finished-issues issues (t/offset-date-time 2020 11 1))
         sprints (sprints->csv (group-by-sprints
                                sprint-end-date nr-sprints sprint-length finished
                                {:ct (partial cycle-time-stats (:wip status-categories))
                                 :throughput count
-                                :status-times #(cleanup-map (reduce (fn [r status]
-                                                                      (assoc r (first status)
-                                                                             (/ (:avg (second status)) 60 24.0)))
-                                                                    {} (status-time-stats %))
-                                                            (:wip status-categories))}))
+                                :status-times #(-> %
+                                                   status-time-stats
+                                                   (apply-to-vals (fn [val]
+                                                                    (/ (:avg val) 60 24.0)))
+                                                   (cleanup-map (:wip status-categories)))}))
         hist (histogram->csv (ct-histogram finished))]
     (with-open [writer (clojure.java.io/writer stats-file)]
       (csv/write-csv writer (-> []

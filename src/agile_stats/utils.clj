@@ -23,3 +23,11 @@
     ;; (let [ks (into #{} ks)]
     ;;   (into {} (filter #(ks (first %)) m)))
   (reduce #(assoc % %2 (get m %2)) {} ks))
+
+(defn apply-to-vals
+  "Returns a map with mod-fn applied to vals."
+  [m mod-fn]
+  (reduce (fn [r entry]
+            (assoc r (first entry)
+                   (mod-fn (second entry))))
+          {} m))
