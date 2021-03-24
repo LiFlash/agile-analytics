@@ -72,7 +72,6 @@ improvements for making the future more predictable."
   ;; (System/exit status)
   )
 
-
 (defn median [ns]
   (if (empty? ns)
     0
@@ -89,20 +88,22 @@ improvements for making the future more predictable."
                         first)]
     (time/local-date date-format date-string)))
 
-
-(defn parse-line [[type key id summary points created resolved status] date-format]
+(defn parse-line [[type key id summary points created resolved status & sprints] date-format]
   {:type type
    :key key
    :id id
    :summary summary
    :points (or (and (not= "" points)
-                    (Float/parseFloat points))
+                    (-> points
+                        Float/parseFloat
+                        (/ 3600)))
                0)
    :created (parse-date created date-format)
    :resolved (or (and (not= "" resolved)
                       (parse-date resolved date-format))
                  nil)
-   :status status})
+   :status status
+   :planned-sprints (filter not-empty sprints)})
 
 (defn read-stories [file-path date-format]
   (with-open [file (clojure.java.io/reader file-path)]
@@ -165,8 +166,12 @@ improvements for making the future more predictable."
                             (into ["Rolling Avg. Story Size"] (:avg-size stats))
                             (into ["Calculated Backlog Size"] (:est-backlog-size stats))
                             (into ["Actual Backlog Size"] (:actual-backlog-size stats))
-                            (into ["Backlog Size by today"] (:later-backlog-size stats))
+                            (into ["Backlog Size by today"] [] ;(:later-backlog-size stats)
+                                  )
                             (into ["#Open Issues"] (:open-issues stats))
+                            (into ["#Solved Issues"] (:solved-issues stats))
+                            (into ["#Created Issues"] (:created-issues stats))
+                            (into ["Avg. Sprints planned"] (:avg-planned-sprints stats))
                             (into ["Rolling Velocity"](:velocity stats))
                             (into ["Current Velocity"] (:actual-velocity stats))
                             [""]
@@ -183,6 +188,11 @@ improvements for making the future more predictable."
 (defn created-after? [date]
   (fn [item]
     (time/before? date (:created item))))
+
+(defn created-between? [start end]
+  (fn [item]
+    (and ((created-after? start) item)
+         ((created-before? end) item))))
 
 (defn resolved?
   ([] #(resolved? %))
@@ -210,6 +220,13 @@ improvements for making the future more predictable."
     (and ((resolved-after? start) item)
          ((resolved-before? end) item))))
 
+(defn status-changed
+  "Returns issues whos status changed between the given dates."
+  [stories start-date end-date]
+  (filter #(or ((resolved-between? start-date end-date) %)
+               ((created-between? start-date end-date) %))
+          stories))
+
 (defn estimated?
   ([] #(estimated? %))
   ([story] (< 0 (:points story))))
@@ -218,7 +235,19 @@ improvements for making the future more predictable."
   ([] #(unestimated? %))
   ([story] (not (estimated? story))))
 
-(defn open-issues [stories date]
+(defn resolved-between
+  "Returns the stories resolved between start and end date."
+  [stories start-date end-date]
+  (filter (resolved-between? start-date end-date) stories))
+
+(defn created-between
+  "Returns the stories created between start and end date."
+  [stories start-date end-date]
+  (filter (created-between? start-date end-date) stories))
+
+(defn open-issues
+  "Returns issues that are unresolved at the given date."
+  [stories date]
   (apply-filters stories [(created-before? date) (resolved-after? date)]))
 
 (defn story-points [stories]
@@ -231,11 +260,17 @@ improvements for making the future more predictable."
       0
       (/ (story-points estimated-stories) (count estimated-stories)))))
 
+(defn rolling-avg
+  "Returns the rolling average for the given metric (fn). fn is called
+  for each sprint  with (fn story start-date end-date)."
+  [stories fn date sprint-length nr-sprints]
+  )
+
 (defn est-backlog-size
   "Estimates the backlog size (sum of story points for open stories) at a
   specific date. Only stories that were already known and open, i.e. not
   resolved at 'date' are taken into account.
-  The size of the stories is estimated by the size of already finished and
+  The size of non-estimated stories is estimated by the size of already finished and
   estimated stories.
   Params:
   stories - The stories to calc the backlog size with
@@ -266,21 +301,21 @@ improvements for making the future more predictable."
       (* 1.0)
       Math/round))
 
-(defn nr-of-sprints
-  "calculates the number of sprints in which the given stories were resolved.
-  sprint-length - The nr of days per sprint"
-  [stories sprint-length]
-  (let [stories (->> stories
-                     (filter resolved?)
-                     (sort-by :resolved time/before?))
-        min-date (-> stories first :resolved)
-        max-date (-> stories last :resolved)
-        sprints (->> sprint-length
-                     (/ (time/time-between min-date max-date :days))
-                     double
-                     Math/round)]
-    (or (and (> sprints 1) sprints)
-        1)))
+;; (defn nr-of-sprints
+;;   "calculates the number of sprints in which the given stories were resolved.
+;;   sprint-length - The nr of days per sprint"
+;;   [stories sprint-length]
+;;   (let [stories (->> stories
+;;                      (filter resolved?)
+;;                      (sort-by :resolved time/before?))
+;;         min-date (-> stories first :resolved)
+;;         max-date (-> stories last :resolved)
+;;         sprints (->> sprint-length
+;;                      (/ (time/time-between min-date max-date :days))
+;;                      double
+;;                      Math/round)]
+;;     (or (and (> sprints 1) sprints)
+;;         1)))
 
 (defn velocity
   "stories - The stories to calc the velocity with
@@ -294,54 +329,84 @@ improvements for making the future more predictable."
   ([stories date nr-sprints] (velocity stories date nr-sprints 2))
   ([stories date nr-sprints sprint-length]
    (let [start-date (time/minus date (time/weeks (* sprint-length nr-sprints)))
-         stories (apply-filters stories
-                                [(resolved-before? date)
-                                 (resolved-after? start-date)])]
+         stories (resolved-between stories start-date date)]
      (Math/round (* 1.0 (/ (story-points stories) nr-sprints))))))
 
+(defn nr-solved-issues
+  "Returns the number of resolved issues in the sprint before date.
+  - stories - The stories to calculate the solved issues with
+  - date - End date of the sprint to count issues format. Default: today
+  - sprint-length - The length of the sprint in weeks. Default: 2"
+  ([stories] (nr-solved-issues stories (time/local-date)))
+  ([stories date] (nr-solved-issues stories date 2))
+  ([stories date sprint-length]
+   (let [start-date (time/minus date (time/weeks sprint-length))]
+     (-> stories
+         (apply-filters [(resolved-before? date)
+                         (resolved-after? start-date)])
+         count))))
+
+(defn avg-nr-of-sprints-planned [stories date sprint-length]
+  (let [start-date (time/minus date (time/weeks sprint-length))
+        stories (resolved-between stories start-date date)]
+    (/ (->> stories
+            (map #(-> % :planned-sprints count))
+            (apply +)
+            (* 1.0))
+       (count stories))))
+
 (defn burndown [backlog-size velocity sprint-length date]
-  (loop [new-size backlog-size
-         new-date date
-         result []]
-    (if (< 0 new-size)
-      (recur  (Math/round (* 1.0 (- new-size velocity)))
-              (time/plus new-date (time/weeks sprint-length))
-              (conj result [new-date new-size]))
-      (conj result [new-date 0]))))
+  (if (< 0 velocity)
+    (loop [new-size backlog-size
+           new-date date
+           result []]
+      (if (< 0 new-size)
+        (recur  (Math/round (* 1.0 (- new-size velocity)))
+                (time/plus new-date (time/weeks sprint-length))
+                (conj result [new-date new-size]))
+        (conj result [new-date 0])))
+    []))
 
 (defn rolling-values [stories date nr-sprints sprint-length]
   (let [months (-> nr-sprints range reverse)]
-    (reduce #(let [date (time/minus date (time/weeks (* sprint-length %2)))
-                   avg-story-size (avg-estimation stories date 1)
-                   rolling-velocity (velocity stories date)
-                   est-backlog-size (est-backlog-size stories date 1)]
+    (reduce #(let [end-date (time/minus date (time/weeks (* sprint-length %2)))
+                   start-1 (time/minus end-date (time/weeks sprint-length))
+                   avg-story-size (avg-estimation stories end-date 1)
+                   rolling-velocity (velocity stories end-date 3)
+                   est-backlog-size (est-backlog-size stories end-date 1)]
                (-> %
-                   (update :date conj date)
+                   (update :date conj end-date)
                    (update :velocity conj rolling-velocity)
-                   (update :actual-velocity conj (velocity stories date 1 2))
+                   (update :actual-velocity conj (velocity stories end-date 1 sprint-length))
                    (update :avg-size conj (-> avg-story-size (* 10.0) Math/round (/ 10.0)))
                    (update :est-backlog-size conj est-backlog-size)
-                   (update :actual-backlog-size conj (actual-backlog-size stories date))
-                   (update :later-backlog-size conj (later-backlog-size stories date))
-                   (update :open-issues conj (count (open-issues stories date)))
-                   (update :burndown conj (burndown est-backlog-size rolling-velocity 2 date))))
+                   (update :actual-backlog-size conj (actual-backlog-size stories end-date))
+                   (update :later-backlog-size conj (later-backlog-size stories end-date))
+                   (update :open-issues conj (count (open-issues stories end-date)))
+                   (update :burndown conj (burndown est-backlog-size rolling-velocity 2 end-date))
+                   (update :solved-issues conj (-> stories (resolved-between start-1 end-date) count)
+                            ;(nr-solved-issues stories end-date sprint-length)
+                            )
+                   (update :created-issues conj (-> stories (created-between start-1 end-date) count))
+                   (update :avg-planned-sprints conj (avg-nr-of-sprints-planned stories end-date sprint-length))))
             {:date [], :est-backlog-size [], :actual-backlog-size [], :later-backlog-size [],
              :open-issues [], :velocity [], :actual-velocity [],
-             :burndown [], :avg-size []}
+             :burndown [], :avg-size [], :solved-issues [], :avg-planned-sprints [], :created-issues []}
             months)))
 
 
-;; (def stories (read-stories "/media/sf_configs/stories.csv"))
+(def stories (read-stories "/home/johannes/Downloads/Jira (1).csv" "dd/MMM/yy"))
 
-;; (est-backlog-size stories (time/local-date 2018 11 1) 3)
+;(est-backlog-size stories (time/local-date 2021 1 15) 3)
 
 ;; (velocity stories (time/local-date 2018 9 1) 3 2)
 
 ;; (burndown 50 10 1 (time/local-date))
 
-;; (write-stats "/media/sf_configs/stats.csv" (rolling-values ;(apply-filters stories [estimated?])
-;;                                             stories
-;;                                             20 2))
+(write-stats "/home/johannes/gdrive/DS24/ds-stats-bugs.csv" (rolling-values ;(apply-filters stories [estimated?])
+                                            stories
+                                            (time/local-date 2021 1 15)
+                                            30 2))
 
 (defn start [args]
   (let [{:keys [in-file out-file options exit-message ok?]} (validate-args args)]
@@ -361,6 +426,8 @@ improvements for making the future more predictable."
 
         (write-stats out-file stats)
         (println "\nWrote stats to " out-file)))))
+
+
 
 (defn -main [& args]
   (start args))
