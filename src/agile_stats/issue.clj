@@ -1,6 +1,23 @@
 (ns agile-stats.issue
-  (:require [agile-stats.utils :refer [merge-maps select-vals]]
+  (:require [agile-stats.utils :refer [merge-maps select-vals apply-to-vals]]
             [java-time :as t]))
+
+;; Bsp. Issue
+(comment
+  {:self <weblink to jira>
+   :key "BSP-001"
+   :created-date :date-of-creation
+   :created-status :initial-status
+   :status :current-status
+   :done-date :date-of-finishing-work
+   :transitions [{:from :some-status
+                  :to :another-status
+                  :date :date-of-transition}]
+   :stats {:status-times {:initial-status {:duration "time in status"
+                                           :times-reached "nr of times this status was set"
+                                           :last-reached "date this status was reached the last time"}
+                          :another-status {:duration :x, :times-reached :y, :last-reached :z}}
+           :ct "cummulated time in a given set of statuses"}})
 
 (defn done-date [done-statuses issue]
   ;;TODO Abstrahieren: Funktioniert fuer jede Statuskategorie
@@ -22,7 +39,7 @@
                          ((fnil conj []) update %2))) {} issues))
 
 (defn resolved? [issue]
-  (:done-date issue))
+  (when (:done-date issue) issue))
 
 (defn had-status? [status issue]
   (when (-> issue :stats :status-times (get status))
@@ -50,7 +67,6 @@
                    to-date
                    (:to transition)
                    (-> times
-                       (assoc :last-transition-date to-date)
                        (update-in [last-status :duration] (fnil + 0) duration )
                        (update-in [last-status :times-reached] (fnil inc 0))
                        (assoc-in [last-status :last-reached] to-date)))
@@ -69,6 +85,10 @@
                              ((fnil conj []) % duration)
                              %))))
           {} issues))
+
+;; (->> issues
+;;      (map #(get-in % [:stats :status-times]) )
+;;      (apply-to-vals :duration))
 
 (defn update-status-times
   "Assumes transitions to be sorted by date from earliest to latest"
@@ -91,7 +111,7 @@
 
 (defn resolved-between [start end issues]
   (reduce (fn [r issue]
-            (if-let [done-date (resolved? issue)]
+            (if-let [done-date (:done-date (resolved? issue))]
               (if (t/before? start done-date end)
                 (conj r issue)
                 r)

@@ -18,7 +18,8 @@
 
 (defn stats [vs]
   {:avg (avg vs)
-   :median (median vs):sum (apply + vs)})
+   :median (median vs)
+   :sum (apply + vs)})
 
 (defn cycle-time-stats
   "Avg. and Median cycle times over all issues. Arity one assumes the key [:stats :ct] exists for each issue"
@@ -57,3 +58,8 @@
         max-time (apply max (keys hist))
         times (range (inc max-time))]
     (reduce #(assoc % %2 (hist %2)) {} times)))
+
+(defn status-hop-stats
+  "Returns avg, median etc. for how often a state was reached per issue."
+  [issues]
+  )
