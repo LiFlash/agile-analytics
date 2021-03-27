@@ -1,5 +1,5 @@
 (ns agile-stats.issue
-  (:require [agile-stats.utils :refer [merge-maps select-vals apply-to-vals]]
+  (:require [agile-stats.utils :refer [merge-maps select-vals update-vals]]
             [java-time :as t]))
 
 ;; Bsp. Issue
@@ -78,17 +78,19 @@
 
 (defmethod status-times :default
   [issues]
-  (reduce (fn [r issue]
-            (merge-maps r (get-in issue [:stats :status-times])
-                        #(let [duration (:duration %2)]
-                           (if duration
-                             ((fnil conj []) % duration)
-                             %))))
-          {} issues))
+  (->> issues
+       (map #(->> [:stats :status-times]
+                  (get-in % )
+                  (update-vals :duration)))
+       (apply merge-maps (fnil conj []) {})))
 
-;; (->> issues
-;;      (map #(get-in % [:stats :status-times]) )
-;;      (apply-to-vals :duration))
+(defn status-hops
+  [issues]
+  (->> issues
+       (map #(->> [:stats :status-times]
+                  (get-in %)
+                  (update-vals :times-reached)))
+       (apply merge-maps (fnil conj []) {})))
 
 (defn update-status-times
   "Assumes transitions to be sorted by date from earliest to latest"

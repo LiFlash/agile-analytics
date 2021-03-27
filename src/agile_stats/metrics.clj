@@ -1,5 +1,6 @@
 (ns agile-stats.metrics
-  (:require [agile-stats.issue :refer [status-times update-cycle-time]]))
+  (:require [agile-stats.issue :refer [status-times update-cycle-time status-hops]]
+            [agile-stats.utils :refer [update-vals]]))
 
 (defn avg [vs]
   (if (not (empty? vs))
@@ -25,9 +26,7 @@
   "Avg. and Median cycle times over all issues. Arity one assumes the key [:stats :ct] exists for each issue"
   ([issues]
    (let [cycle-times (map #(get-in % [:stats :ct]) issues)]
-     {:ct-sum (apply + cycle-times)
-      :avg (avg cycle-times)
-      :median (median cycle-times)}))
+     (stats cycle-times)))
   ([statuses issues]
    (let [issues (map #(update-cycle-time statuses %) issues)]
      (cycle-time-stats issues))))
@@ -40,17 +39,18 @@
 (defn status-time-stats
   "Returns a map with stats like avg, median and sum of time for each status the issues were in."
   [issues]
-  (reduce (fn [r [status times]]
-            (if (not (empty? times))
-              (assoc r status (stats times))
-              r))
-          {} (status-times issues)))
+  (->> issues
+       status-times
+       (update-vals stats)))
 
+(defn status-hop-stats
+  [issues]
+  (->> issues
+       status-hops
+       (update-vals stats)))
 ;; (status-time-stats [{:stats {:status-times {:ip {:duration 4}
-;;                                        :last-transition-date "Y"
-;;                                        :review {:duration 2}}}}
+;;                                             :review {:duration 2}}}}
 ;;                {:stats {:status-times {:ip {:duration 5}
-;;                                        :last-transition-date "X"
 ;;                                        :review {:duration 11}}}}])
 
 (defn ct-histogram [issues]
@@ -59,7 +59,21 @@
         times (range (inc max-time))]
     (reduce #(assoc % %2 (hist %2)) {} times)))
 
-(defn status-hop-stats
-  "Returns avg, median etc. for how often a state was reached per issue."
-  [issues]
-  )
+(defn percentile [p issues]
+  (let [issue-count (count issues)]
+    (->> issues
+         (take (* issue-count p))
+         last)))
+
+(defn percentiles [issues]
+  (let [sorted-issues (->> issues
+                           (map #(get-in % [:stats :ct]))
+                           sort)
+        p-50 (percentile 0.5 sorted-issues)
+        p-75 (percentile 0.75 sorted-issues)
+        p-85 (percentile 0.85 sorted-issues)
+        p-95 (percentile 0.95 sorted-issues)]
+    {50 p-50
+     75 p-75
+     85 p-85
+     95 p-95}))

@@ -1,7 +1,8 @@
 (ns agile-stats.configs
   (:require [java-time :as t]))
 
-(def ds {:sprint-end-date (t/offset-date-time 2021 3 12)
+(def ds { ;:renew-db true
+         :sprint-end-date (t/offset-date-time 2021 3 26)
          :update-date (t/offset-date-time 2020 12 1);(t/offset-date-time 2020 11 1)
          :sprint-length 2
          :nr-sprints 7
@@ -12,7 +13,8 @@
  \"Test Plan\", \"Test Set\", \"Xray Test\",
  \"Sub Test Execution\", Precondition, Sub-Bug, Sub-Task, Epic, Bug) AND labels in (DS_Frontend,DS_Backend)"})
 
-(def cch {:sprint-end-date (t/offset-date-time 2021 3 16)
+(def cch { ;:renew-db true
+          :sprint-end-date (t/offset-date-time 2021 3 16)
           :sprint-length 2
           :nr-sprints 7
           :update-date (t/offset-date-time 2020 12 1)

@@ -37,6 +37,13 @@
        (sort-by first <)
        (into [["Cycle Time (days)" "#Issues" "Issues"]])))
 
+(defn percentiles->csv [percentiles]
+  (let [ps (keys percentiles)
+        vs (map #(/ % 60 24.0) (vals percentiles))]
+    (-> []
+        (conj ps)
+        (conj vs))))
+
 (defn read-issue-edn [file-path]
   (when (.exists (clojure.java.io/file file-path))
     (clojure.edn/read-string
