@@ -26,9 +26,8 @@
     (->> issue
          :transitions
          (reduce (fn [result {:keys [date to] :as transition}]
-                   (if (get done-statuses to)
-                     (or result date)
-                     nil)) nil))))
+                   (when (done-statuses to)
+                     (or result date))) nil))))
 
 (defn update-done-date [done-statuses issue]
   (assoc issue :done-date (done-date done-statuses issue)))
@@ -105,10 +104,17 @@
 (defn update-cycle-time [statuses issue]
   (assoc-in issue [:stats :ct] (cycle-time statuses issue)))
 
+(defn last-transition-date [issue]
+  (-> issue :transitions last :date))
+
+(defn update-last-transition-date [issue]
+  (assoc issue :last-transition-date (last-transition-date issue)))
+
 (defn update-issue-stats [ status-categories issue]
   (->> issue
        update-status-times
        (update-done-date (:done status-categories))
+       update-last-transition-date
        (update-cycle-time (:wip status-categories))))
 
 (defn resolved-between [start end issues]
@@ -139,3 +145,14 @@
                         (assoc sprint key (stat-fn sprint-issues))) sprint stat-fns)
               sprint))
          sprints)))
+
+(defn age
+  "Returns the cycle time for statuses + the time the issue is in it's current
+  status if it is one of statuses"
+  [statuses issue]
+  (let [ct (cycle-time statuses issue)]
+    (if (statuses (:status issue))
+      (let [date  (:last-transition-date issue)
+            time-in-status (t/time-between date (t/offset-date-time) t/minutes)]
+        (t/plus ct time-in-status))
+      ct)))

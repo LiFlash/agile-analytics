@@ -1,5 +1,6 @@
 (ns agile-stats.db
-  (:require [java-time :as t]))
+  (:require [agile-stats.utils :refer [update-vals]]
+            [java-time :as t]))
 
 ;; (defn status-times->csv [sprints]
 ;;   (let [times (reduce (fn [r sprint]
@@ -66,3 +67,10 @@
   (persist-db configs
               {:last-update-date (t/offset-date-time)
                :issues issues}))
+
+(defn update-issues [configs update-fn]
+  (let [db (load-db configs)
+        issues (->> db
+                   :issues
+                   (update-vals update-fn))]
+    (persist-db configs (assoc db :issues issues))))

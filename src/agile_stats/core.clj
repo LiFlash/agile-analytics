@@ -8,7 +8,7 @@
             [agile-stats.metrics
              :refer
              [ct-histogram cycle-time-stats status-time-stats status-hop-stats percentiles]]
-            [agile-stats.utils :refer [update-vals cleanup-map vec->map]]
+            [agile-stats.utils :refer [update-vals cleanup-map vec->map select-vals]]
             [clojure.data.csv :as csv]
             [java-time :as t]))
 
