@@ -1,5 +1,5 @@
 (ns agile-stats.metrics
-  (:require [agile-stats.issue :refer [status-times update-cycle-time status-hops cycle-time age]]
+  (:require [agile-stats.issue :refer [status-times update-cycle-time status-hops cycle-time update-age]]
             [agile-stats.utils :refer [update-vals]]))
 
 (defn avg [vs]
@@ -78,5 +78,5 @@
      85 p-85
      95 p-95}))
 
-(defn wip-age [wip-statuses issues]
-  (map (partial age wip-statuses) issues))
+(defn status-ages [statuses issues]
+  (group-by :status (map (partial update-age statuses) issues)))

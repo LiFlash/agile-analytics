@@ -102,6 +102,11 @@
   (reduce #(+ % (:duration %2)) 0 (select-vals (get-in issue [:stats :status-times]) statuses)))
 
 (defn update-cycle-time [statuses issue]
+  ;;TODO Remove this one (and all access to [:stats :ct]) and replace by always
+  ;; calculating ct for the needed statuses instead of saving it here, because
+  ;; ct is dependent on the given statuses
+  ;; Vielleicht auch nicht sinnvoll dies zu entfernen, da der Aufrufer am Ende die Verknuepfung von
+  ;; issue und :ct braucht. cycle-time muss auf jeden Fall aus der persistenz raus.
   (assoc-in issue [:stats :ct] (cycle-time statuses issue)))
 
 (defn last-transition-date [issue]
@@ -153,6 +158,9 @@
   (let [ct (cycle-time statuses issue)]
     (if (statuses (:status issue))
       (let [date  (:last-transition-date issue)
-            time-in-status (t/time-between date (t/offset-date-time) t/minutes)]
+            time-in-status (t/time-between date (t/offset-date-time) :minutes)]
         (t/plus ct time-in-status))
       ct)))
+
+(defn update-age [statuses issue]
+  (assoc-in issue [:stats :age] (age statuses issue)))

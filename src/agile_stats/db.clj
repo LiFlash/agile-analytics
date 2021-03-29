@@ -45,6 +45,24 @@
         (conj ps)
         (conj vs))))
 
+(defn status-ages->csv [ages]
+  (let [max-age (java.lang.Math/round (/ (->> ages
+                              vals
+                              flatten
+                              (map #(get-in % [:stats :age]))
+                              (apply max))
+                         60 24.0))
+        timeline (range 0 (inc max-age))
+        age-fn #(java.lang.Math/round (/ (get-in % [:stats :age]) 60 24.0))
+        row-fn (fn [issues]
+                 (let [sorted (sort-by age-fn issues)]
+                   (map #(str (:key %) "," (age-fn %)) sorted)))]
+    (into []
+          (map #(into [(first %)] (row-fn (second %))) ages))))
+
+;; (status-ages->csv {:status-one [{:key "one" :status :status-one :stats {:age 5}}]
+;;                    :status-two [{:key "two" :stats {:age 7}}]})
+
 (defn read-issue-edn [file-path]
   (when (.exists (clojure.java.io/file file-path))
     (clojure.edn/read-string
