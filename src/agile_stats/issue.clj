@@ -46,9 +46,9 @@
 
 (defmulti status-times
   "For multiple issues returns a map containing the statuses and durations for all issues."
-  class)
+  map?)
 
-(defmethod status-times clojure.lang.PersistentArrayMap
+(defmethod status-times true
   [issue]
   ;;TODO Refactor loop -> reduce
   ;;TODO refactor input param to be transitions not a hole issue
