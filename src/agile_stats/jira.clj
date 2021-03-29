@@ -76,12 +76,17 @@
        :status (get-in issue [:fields :status :name])
        :transitions (->> issue :key jira-changelog transition-entries (sort-by :date t/before?))}))
 
-(defn get-issues [query & [update-date]]
-  (let [date (t/format "YYYY-MM-dd" update-date)
-        issues (jira-paginate (str query
-                                   (and date
-                                        (str " and status was not done before " date " and updated > " date))
-                                   "&fields=created,status" ))]
+(defn get-issues [query done-after-date update-date]
+  ;;TODO make dates optional (in the signature)
+  (let [format-date (partial t/format "YYYY-MM-dd")
+        query (str query
+                   (when done-after-date
+                     (str " and status was not done before " (format-date done-after-date)))
+                   (when update-date
+                     (str " and updated >= " (format-date update-date)))
+                   "&fields=created,status" )
+        _ (println "query: " query)
+        issues (jira-paginate query)]
     (->> issues
          (map parse-issue)
          (map (partial update-issue-stats status-categories)))))

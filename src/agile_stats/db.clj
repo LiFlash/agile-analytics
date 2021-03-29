@@ -1,5 +1,5 @@
 (ns agile-stats.db
-  (:require [agile-stats.utils :refer [update-vals]]
+  (:require [agile-stats.utils :refer [update-vals minutes->days]]
             [java-time :as t]))
 
 ;; (defn status-times->csv [sprints]
@@ -19,8 +19,8 @@
                         (let [stats (-> r
                                         (update :end-date conj (t/format "YYYY-MM-dd"(:end-date sprint)))
                                         (update :throughput conj (:throughput sprint))
-                                        (update :avg conj (/ (get-in sprint [:ct :avg]) 60 24.0))
-                                        (update :median conj (/ (get-in sprint [:ct :median]) 60 24.0)))]
+                                        (update :avg conj (minutes->days (get-in sprint [:ct :avg])))
+                                        (update :median conj (minutes->days (get-in sprint [:ct :median]))))]
                           stats))
                       {:end-date [], :throughput [], :avg [], :median []}
                       sprints)]
@@ -40,23 +40,16 @@
 
 (defn percentiles->csv [percentiles]
   (let [ps (keys percentiles)
-        vs (map #(/ % 60 24.0) (vals percentiles))]
+        vs (map minutes->days (vals percentiles))]
     (-> []
         (conj ps)
         (conj vs))))
 
 (defn status-ages->csv [ages]
-  (let [max-age (java.lang.Math/round (/ (->> ages
-                              vals
-                              flatten
-                              (map #(get-in % [:stats :age]))
-                              (apply max))
-                         60 24.0))
-        timeline (range 0 (inc max-age))
-        age-fn #(java.lang.Math/round (/ (get-in % [:stats :age]) 60 24.0))
+  (let [age-fn #(minutes->days (get-in % [:stats :age]))
         row-fn (fn [issues]
                  (let [sorted (sort-by age-fn issues)]
-                   (map #(str (:key %) "," (age-fn %)) sorted)))]
+                   (map #(str (:key %) ", " (age-fn %)) sorted)))]
     (into []
           (map #(into [(first %)] (row-fn (second %))) ages))))
 

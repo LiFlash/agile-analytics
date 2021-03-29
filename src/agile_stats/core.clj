@@ -16,7 +16,12 @@
                      status-hop-stats
                      percentiles
                      status-ages]]
-            [agile-stats.utils :refer [update-vals cleanup-map vec->map select-vals]]
+            [agile-stats.utils
+             :refer [update-vals
+                     cleanup-map
+                     vec->map
+                     select-vals
+                     minutes->days]]
             [clojure.data.csv :as csv]
             [java-time :as t]))
 
@@ -27,7 +32,7 @@
         change-date (if renew-db update-date (or last-update-date update-date))
         issues (into (or (when-not renew-db issues) {})
                      (-> (str base-url jql-query issue-query)
-                         (get-issues (when change-date (t/minus change-date (t/days 1))))
+                         (get-issues update-date last-update-date)
                          (vec->map :key)))]
     (persist-issues configs issues)
     db))
@@ -44,7 +49,7 @@
                      :status-times #(->> %
                                          status-time-stats
                                          (update-vals (fn [val]
-                                                        (/ (:avg val) 60 24.0)))
+                                                        (minutes->days (:avg val))))
                                          (cleanup-map wip-statuses))}))
 
 (defn update-stats [configs]
@@ -55,20 +60,30 @@
                    :issues
                    vals)
         finished (finished-issues issues (t/offset-date-time 2020 11 1))
-        sprints (sprints->csv (sprints sprint-end-date nr-sprints sprint-length finished wip-statuses))
+        sprints  (sprints sprint-end-date nr-sprints sprint-length finished wip-statuses)
+        csv-sprints (sprints->csv sprints)
         status-hops (->> finished
                          status-hop-stats
-                         (update-vals #(-> % :avg (* 1.0)))
+                         (update-vals #(->> % :avg (* 1.0) (round 2)))
                          (cleanup-map wip-statuses))
         percentiles (percentiles->csv (percentiles finished))
         wip-age (->> issues
                      (filter-by-status wip-statuses)
                      (status-ages wip-statuses)
                      (status-ages->csv))
+        done-issues (->> sprints
+                         last
+                         :issues
+                         (status-ages wip-statuses)
+                         vals flatten
+                         (sort-by #(get-in % [:stats :age]))
+                         (map #(str (:key %)", " (minutes->days (get-in % [:stats :age])))))
         hist (histogram->csv (ct-histogram finished))]
     (with-open [writer (clojure.java.io/writer stats-file)]
       (csv/write-csv writer (-> []
-                                (into sprints)
+                                (into [(into ["Done last sprint"] done-issues)])
+                                (into [[""]])
+                                (into csv-sprints)
                                 (into [[""][""] ["Status hops"]])
                                 (into status-hops)
                                 (into [[""]["Percentiles"]])

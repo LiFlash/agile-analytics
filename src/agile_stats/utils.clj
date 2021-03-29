@@ -17,8 +17,10 @@
    (reduce (partial merge-maps f) m1 (into [m2 m3] ms))))
 
 (defn vec->map
-  "Assoc all items in v to the key returned by (key-fn item)"
+  "Assoc all items in v to the key returned by (key-fn item).
+  Duplicate keys will be overwritten, so the last item found for a key will be mapped."
   [v key-fn]
+  ;; TODO refactor to group-by plus removing the collection vals, so every key is mapped to a single item
   (reduce #(assoc % (key-fn %2) %2) {} v))
 
 (defn cleanup-map
@@ -35,3 +37,12 @@
             (assoc r (first entry)
                    (f (second entry))))
           {} m))
+
+(defn round
+  "Round down a double to the given precision (number of significant digits)"
+  [precision d]
+  (let [factor (Math/pow 10 precision)]
+    (/ (Math/floor (* d factor)) factor)))
+
+(defn minutes->days [minutes]
+  (round 1 (/ minutes 60 24.0)))
