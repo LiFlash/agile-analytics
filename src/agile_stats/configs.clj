@@ -11,7 +11,7 @@
          :base-url "https://digistore.atlassian.net/rest/api/2/"
          :issue-query "project = DS AND type not in (\"Test Execution\",
  \"Test Plan\", \"Test Set\", \"Xray Test\",
- \"Sub Test Execution\", Precondition, Sub-Bug, Sub-Task, Epic, Bug) AND labels in (DS_Frontend,DS_Backend)"})
+ \"Sub Test Execution\", Precondition, Sub-Bug, Sub-Task, Epic, Bug) AND labels in (DS_Frontend,DS_Backend) AND labels not in (nf)"})
 
 (def cch { ;:renew-db true
           :sprint-end-date (t/offset-date-time 2021 3 29)
