@@ -32,10 +32,9 @@
         change-date (if renew-db update-date (or last-update-date update-date))
         issues (into (or (when-not renew-db issues) {})
                      (-> (str base-url jql-query issue-query)
-                         (get-issues update-date last-update-date)
+                         (get-issues update-date change-date)
                          (vec->map :key)))]
-    (persist-issues configs issues)
-    db))
+    (persist-issues configs issues)))
 
 (defn- filter-by-status
   [statuses issues]

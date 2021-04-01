@@ -72,7 +72,8 @@
   (:last-update-date (load-db configs)))
 
 (defn persist-db [configs db]
-  (spit (:storage-file configs) (prn-str db)))
+  (spit (:storage-file configs) (prn-str db))
+  db)
 
 (defn persist-issues [configs issues]
   (persist-db configs
