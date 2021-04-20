@@ -14,14 +14,16 @@
                      cycle-time-stats
                      status-time-stats
                      status-hop-stats
-                     percentiles
-                     status-ages]]
+                     ct-percentiles
+                     status-ages
+                     monte-carlo-issues]]
             [agile-stats.utils
              :refer [update-vals
                      cleanup-map
                      vec->map
                      select-vals
-                     minutes->days]]
+                     minutes->days
+                     round]]
             [clojure.data.csv :as csv]
             [java-time :as t]))
 
@@ -52,20 +54,22 @@
                                          (cleanup-map wip-statuses))}))
 
 (defn update-stats [configs]
-  (let [{:keys [sprint-end-date sprint-length nr-sprints stats-file]} configs
+  (let [{:keys [sprint-end-date sprint-length nr-sprints stats-file update-date]} configs
         wip-statuses (:wip status-categories)
         issues (-> configs
                    update-issue-db
                    :issues
                    vals)
-        finished (finished-issues issues (t/offset-date-time 2020 11 1))
+        finished (finished-issues issues update-date)
         sprints  (sprints sprint-end-date nr-sprints sprint-length finished wip-statuses)
         csv-sprints (sprints->csv sprints)
         status-hops (->> finished
                          status-hop-stats
                          (update-vals #(->> % :avg (* 1.0) (round 2)))
                          (cleanup-map wip-statuses))
-        percentiles (percentiles->csv (percentiles finished))
+        percentiles (percentiles->csv (->> finished
+                                           ct-percentiles
+                                           (update-vals minutes->days)))
         wip-age (->> issues
                      (filter-by-status wip-statuses)
                      (status-ages wip-statuses)
@@ -77,6 +81,11 @@
                          vals flatten
                          (sort-by #(get-in % [:stats :age]))
                          (map #(str (:key %)", " (minutes->days (get-in % [:stats :age])))))
+        mc-issues (let [end-date (t/offset-date-time)
+                        start-date update-date]
+                    (->> finished
+                         (monte-carlo-issues 14 start-date end-date)
+                         percentiles->csv))
         hist (histogram->csv (ct-histogram finished))]
     (with-open [writer (clojure.java.io/writer stats-file)]
       (csv/write-csv writer (-> []
@@ -87,6 +96,8 @@
                                 (into status-hops)
                                 (into [[""]["Percentiles"]])
                                 (into percentiles)
+                                (into [[""]["Monte Carlo Issue Count (14 days)"]])
+                                (into mc-issues)
                                 (into [[""] [""] ["WIP Age"]])
                                 (into wip-age)
                                 (into [[""] [""] ["Cycle Time Histogram"]])

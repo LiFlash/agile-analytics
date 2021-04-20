@@ -1,6 +1,7 @@
 (ns agile-stats.metrics
   (:require [agile-stats.issue :refer [status-times update-cycle-time status-hops cycle-time update-age]]
-            [agile-stats.utils :refer [update-vals]]))
+            [agile-stats.utils :refer [update-vals]]
+            [java-time :as t]))
 
 (defn avg [vs]
   (if (not (empty? vs))
@@ -59,24 +60,63 @@
         times (range (inc max-time))]
     (reduce #(assoc % %2 (hist %2)) {} times)))
 
-(defn percentile [p issues]
-  (let [issue-count (count issues)]
-    (->> issues
-         (take (* issue-count p))
+(defn percentile [p coll]
+  (let [item-count (count coll)]
+    (->> coll
+         (take (* item-count p))
          last)))
 
-(defn percentiles [issues]
-  (let [sorted-issues (->> issues
-                           (map #(get-in % [:stats :ct]))
-                           sort)
-        p-50 (percentile 0.5 sorted-issues)
-        p-75 (percentile 0.75 sorted-issues)
-        p-85 (percentile 0.85 sorted-issues)
-        p-95 (percentile 0.95 sorted-issues)]
-    {50 p-50
-     75 p-75
-     85 p-85
-     95 p-95}))
+(defn percentiles [fractions coll]
+  (reduce #(assoc % %2 (percentile (/ %2 100) coll)) {} fractions))
+
+(defn ct-percentiles [issues]
+  (->> issues
+       (map #(get-in % [:stats :ct]))
+       sort
+       (percentiles [50 75 85 95])))
 
 (defn status-ages [statuses issues]
   (group-by :status (map (partial update-age statuses) issues)))
+
+
+(defn throughput-per-day
+  "Returns a vector containing the throughput for each day between start and end date"
+  [start end issues]
+  (let [start (-> start
+                  t/local-date)
+        date-map (group-by #(when-let [done-date (:done-date %)]
+                              (-> done-date t/local-date t/format)) issues)
+        nr-of-days (-> start
+                       (t/time-between end :days)
+                       inc)]
+    ;(println (count (sort-by first (update-vals count date-map))))
+    ;; (doall (map #(let [date (->> % t/days (t/plus start) t/format)]
+    ;;                (println date ": " (count (date-map date))))
+    ;;             (range nr-of-days)))
+    (map #(->> % t/days (t/plus start) t/format (date-map) count)
+         (range nr-of-days))))
+
+(defn- random-sum
+  "Randomly picks n items from coll and sums them up. Key-fn can be supplied to
+  select the val from each item."
+  ([coll n] (random-sum coll n identity))
+  ([coll n key-fn]
+   (let [max-rand (count coll)]
+     (->> (repeatedly n #(rand-int max-rand))
+          (map #(->> %
+                     (nth coll)
+                     key-fn))
+          (apply +)))))
+
+(defn monte-carlo-issues
+  ([days reference-throughput]
+   (let [iterations (for [i (range 30000)]
+                      (random-sum reference-throughput days))]
+     (->> iterations
+          sort
+          reverse
+          (percentiles [50 75 85 95]))))
+  ([days start end issues]
+   (monte-carlo-issues days (throughput-per-day start end issues))))
+
+;(monte-carlo-issues 14 (repeatedly 60 #(rand-int 3)))

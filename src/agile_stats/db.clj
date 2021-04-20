@@ -38,9 +38,11 @@
        (sort-by first <)
        (into [["Cycle Time (days)" "#Issues" "Issues"]])))
 
-(defn percentiles->csv [percentiles]
+(defn percentiles->csv
+  ;;TODO rename/refactor to map-to-rows
+  [percentiles]
   (let [ps (keys percentiles)
-        vs (map minutes->days (vals percentiles))]
+        vs (vals percentiles)]
     (-> []
         (conj ps)
         (conj vs))))
