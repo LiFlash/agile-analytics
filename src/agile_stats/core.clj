@@ -16,7 +16,9 @@
                      status-hop-stats
                      ct-percentiles
                      status-ages
-                     monte-carlo-issues]]
+                     throughput-per-day
+                     monte-carlo-issues
+                     monte-carlo-time]]
             [agile-stats.utils
              :refer [update-vals
                      cleanup-map
@@ -81,11 +83,14 @@
                          vals flatten
                          (sort-by #(get-in % [:stats :age]))
                          (map #(str (:key %)", " (minutes->days (get-in % [:stats :age])))))
-        mc-issues (let [end-date (t/offset-date-time)
-                        start-date update-date]
-                    (->> finished
-                         (monte-carlo-issues 14 start-date end-date)
-                         percentiles->csv))
+        ref-throughput (throughput-per-day update-date (t/offset-date-time) finished)
+        nr-issues 40
+        mc-issues (->> ref-throughput
+                       (monte-carlo-issues 14)
+                       percentiles->csv)
+        mc-time (->> ref-throughput
+                     (monte-carlo-time nr-issues (t/offset-date-time))
+                     (percentiles->csv))
         hist (histogram->csv (ct-histogram finished))]
     (with-open [writer (clojure.java.io/writer stats-file)]
       (csv/write-csv writer (-> []
@@ -98,6 +103,8 @@
                                 (into percentiles)
                                 (into [[""]["Monte Carlo Issue Count (14 days)"]])
                                 (into mc-issues)
+                                (into [[""][(str "Monte Carlo Done dates for " nr-issues " issues")]])
+                                (into mc-time)
                                 (into [[""] [""] ["WIP Age"]])
                                 (into wip-age)
                                 (into [[""] [""] ["Cycle Time Histogram"]])

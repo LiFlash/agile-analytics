@@ -1,5 +1,5 @@
 (ns agile-stats.issue
-  (:require [agile-stats.utils :refer [merge-maps select-vals update-vals]]
+  (:require [agile-stats.utils :refer [select-vals update-vals]]
             [java-time :as t]))
 
 ;; Bsp. Issue
@@ -17,7 +17,7 @@
                                            :times-reached "nr of times this status was set"
                                            :last-reached "date this status was reached the last time"}
                           :another-status {:duration :x, :times-reached :y, :last-reached :z}}
-           :ct "cummulated time in a given set of statuses"}})
+           :ct "cumulated time in a given set of statuses"}})
 
 (defn done-date [done-statuses issue]
   ;;TODO Abstrahieren: Funktioniert fuer jede Statuskategorie
@@ -32,10 +32,10 @@
 (defn update-done-date [done-statuses issue]
   (assoc issue :done-date (done-date done-statuses issue)))
 
-(defn group-by-status [issues]
-  (reduce #(merge-maps % (get-in %2 [:stats :status-times])
-                       (fn [update val]
-                         ((fnil conj []) update %2))) {} issues))
+;; (defn group-by-status [issues]
+;;   (reduce #(merge-maps % (get-in %2 [:stats :status-times])
+;;                        (fn [update val]
+;;                          ((fnil conj []) update %2))) {} issues))
 
 (defn resolved? [issue]
   (when (:done-date issue) issue))
@@ -80,16 +80,18 @@
   (->> issues
        (map #(->> [:stats :status-times]
                   (get-in % )
-                  (update-vals :duration)))
-       (apply merge-maps (fnil conj []) {})))
+                  (update-vals :duration)
+                  (update-vals vector)))
+       (apply merge-with into {})))
 
 (defn status-hops
   [issues]
   (->> issues
        (map #(->> [:stats :status-times]
                   (get-in %)
-                  (update-vals :times-reached)))
-       (apply merge-maps (fnil conj []) {})))
+                  (update-vals :times-reached)
+                  (update-vals vector)))
+       (apply merge-with into {})))
 
 (defn update-status-times
   "Assumes transitions to be sorted by date from earliest to latest"
@@ -115,7 +117,7 @@
 (defn update-last-transition-date [issue]
   (assoc issue :last-transition-date (last-transition-date issue)))
 
-(defn update-issue-stats [ status-categories issue]
+(defn update-issue-stats [status-categories issue]
   (->> issue
        update-status-times
        (update-done-date (:done status-categories))

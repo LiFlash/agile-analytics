@@ -39,10 +39,11 @@
        (into [["Cycle Time (days)" "#Issues" "Issues"]])))
 
 (defn percentiles->csv
-  ;;TODO rename/refactor to map-to-rows
+  ;;TODO rename/refactor to "map-to-rows"
   [percentiles]
   (let [ps (keys percentiles)
         vs (vals percentiles)]
+    ;;TODO just return [ps vs] and not use conj
     (-> []
         (conj ps)
         (conj vs))))

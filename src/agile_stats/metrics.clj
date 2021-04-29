@@ -109,14 +109,36 @@
           (apply +)))))
 
 (defn monte-carlo-issues
-  ([days reference-throughput]
-   (let [iterations (for [i (range 30000)]
-                      (random-sum reference-throughput days))]
-     (->> iterations
-          sort
-          reverse
-          (percentiles [50 75 85 95]))))
-  ([days start end issues]
-   (monte-carlo-issues days (throughput-per-day start end issues))))
+  [days reference-throughput]
+  (let [iterations (for [i (range 30000)]
+                     (random-sum reference-throughput days))]
+    (->> iterations
+         sort
+         reverse
+         (percentiles [50 75 85 95]))))
 
 ;(monte-carlo-issues 14 (repeatedly 60 #(rand-int 3)))
+
+(defn monte-carlo-time [nr-issues start-date reference-throughput]
+  (let [max-rand (count reference-throughput)
+        iterations (for [i (range 30000)]
+                     (loop [nr-issues nr-issues
+                            nr-days 1]
+                       (let [throughput (nth reference-throughput (rand-int max-rand))
+                             left-issues (- nr-issues throughput)]
+                         (if (<= left-issues 0)
+                           nr-days
+                           (recur left-issues (inc nr-days))))))
+
+        p (->> iterations
+               sort
+               ;reverse
+               (percentiles [50 75 85 95]))]
+    ;;TODO convert percentiles to dates
+    (update-vals #(->> %
+                      t/days
+                      (t/plus start-date)
+                      (t/format "YYYY-MM-dd"))
+                 p)))
+
+;(monte-carlo-time 10 (t/offset-date-time) [5 1 1 3 2 1 2 5 3])

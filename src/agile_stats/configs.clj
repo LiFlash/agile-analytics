@@ -2,8 +2,8 @@
   (:require [java-time :as t]))
 
 (def ds { ;:renew-db true
-         :sprint-end-date (t/offset-date-time 2021 4 9)
-         :update-date (t/offset-date-time 2021 1 1);(t/offset-date-time 2020 11 1)
+         :sprint-end-date (t/offset-date-time 2021 4 23)
+         :update-date (t/minus (t/offset-date-time 2021 4 23) (t/weeks 14));(t/offset-date-time 2020 11 1)
          :sprint-length 2
          :nr-sprints 7
          :storage-file "ds-issues.edn"
@@ -14,10 +14,10 @@
  \"Sub Test Execution\", Precondition, Sub-Bug, Sub-Task, Epic, Bug) AND labels in (DS_Frontend,DS_Backend) AND labels not in (nf)"})
 
 (def cch { ;:renew-db true
-          :sprint-end-date (t/offset-date-time 2021 4 13)
+          :sprint-end-date (t/offset-date-time 2021 4 27)
           :sprint-length 2
           :nr-sprints 7
-          :update-date (t/offset-date-time 2021 1 1)
+          :update-date (t/offset-date-time 2021 2 1)
           :storage-file "cch-issues.edn"
           :stats-file "cch-stats.csv"
           :base-url "https://digistore.atlassian.net/rest/api/2/"
@@ -27,4 +27,4 @@
 
 (def status-categories {:todo #{"To Do" "Dependent" "Can be groomed" "To be defined"}
                         :wip #{"Blocked" "To Be Fixed" "In Progress" "R4 Code Review" "Code Review" "R4 Testing" "Testing" }
-                        :done #{"R4 Merge" "Approval" "Merge" "R4 Release" "Done"}})
+                        :done #{"R4 Merge" "Approval" "Merge" "R4 Release" "Release" "Done"}})
