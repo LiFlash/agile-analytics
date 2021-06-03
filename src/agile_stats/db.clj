@@ -48,11 +48,21 @@
         (conj ps)
         (conj vs))))
 
+(defn csv-transpose
+  "Transposes two rows and applies the given formatter"
+  [rows & [{:keys [format-first format-second]}]]
+  ;;TODO Auf beliebig viele rows erweitern (die formatter)
+  (let [t (apply mapv vector rows)]
+    (vector (if format-first (mapv format-first (first t)) (first t))
+            (if format-second (mapv format-second (second t)) (second t)))))
+
 (defn status-ages->csv [ages]
   (let [age-fn #(minutes->days (get-in % [:stats :age]))
         row-fn (fn [issues]
                  (let [sorted (sort-by age-fn issues)]
-                   (map #(str (:key %) ", " (age-fn %)) sorted)))]
+                   (map #(str (:key %)
+;                              ", " (:summary %)
+                              ", "(age-fn %)) sorted)))]
     (into []
           (map #(into [(first %)] (row-fn (second %))) ages))))
 
