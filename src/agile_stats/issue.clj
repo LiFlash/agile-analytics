@@ -45,7 +45,7 @@
     issue))
 
 (defmulti status-times
-  "For multiple issues returns a map containing the statuses and durations for all issues."
+  "For multiple issues returns a map containing the statuses and durations for all issues. For a single issue the timely stats are extracted from the transitions. i.e. The time an issue was in a status, the last date an issue visited a status, etc."
   map?)
 
 (defmethod status-times true
@@ -71,7 +71,7 @@
                        (assoc-in [last-status :last-reached] to-date)))
             (recur (rest transitions)
                    last-date
-                   last-status
+                   (:to transition)
                    times)))
         times))))
 
@@ -101,7 +101,8 @@
 (defn cycle-time
   "Cycle Time for a single issue"
   [statuses issue]
-  (reduce #(+ % (:duration %2)) 0 (select-vals (get-in issue [:stats :status-times]) statuses)))
+  (reduce #(+ % (:duration %2)) 0
+          (select-vals (get-in issue [:stats :status-times]) statuses)))
 
 (defn update-cycle-time [statuses issue]
   ;;TODO Remove this one (and all access to [:stats :ct]) and replace by always
@@ -133,11 +134,12 @@
               r)) [] issues))
 
 (defn finished-issues
-  "Issues that are done (after after-date if given) and were worked on, i.e. cycle time > 0"
-  [issues & [after-date]]
+  "Issues that are done (after after-date and before before-date if given) and were worked on, i.e. cycle time > 0"
+  [issues & [after-date before-date]]
   (filter #(and (resolved? %)
                 (> (get-in % [:stats :ct]) 0)
-                (or (not after-date) (t/before? after-date (:done-date %))))
+                (or (not after-date) (t/before? after-date (:done-date %)))
+                (or (not before-date) (t/before? (:done-date %) before-date)))
           issues))
 
 (defn group-by-sprints [sprint-end-date nr-sprints sprint-length issues & [stat-fns]]

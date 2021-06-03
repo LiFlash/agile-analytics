@@ -119,22 +119,26 @@
 
 ;(monte-carlo-issues 14 (repeatedly 60 #(rand-int 3)))
 
+(defn- days-until-release
+  [nr-issues reference-throughput]
+  (let [max-rand (count reference-throughput)]
+    (loop [nr-issues nr-issues
+           nr-days 1]
+      (let [throughput (nth reference-throughput (rand-int max-rand))
+            left-issues (- nr-issues throughput)]
+        (if (<= left-issues 0)
+          nr-days
+          (recur left-issues (inc nr-days)))))))
+
 (defn monte-carlo-time [nr-issues start-date reference-throughput]
-  (let [max-rand (count reference-throughput)
-        iterations (for [i (range 30000)]
-                     (loop [nr-issues nr-issues
-                            nr-days 1]
-                       (let [throughput (nth reference-throughput (rand-int max-rand))
-                             left-issues (- nr-issues throughput)]
-                         (if (<= left-issues 0)
-                           nr-days
-                           (recur left-issues (inc nr-days))))))
+  (let [iterations (for [i (range 30000)]
+                     (days-until-release nr-issues reference-throughput))
 
         p (->> iterations
                sort
                ;reverse
                (percentiles [50 75 85 95]))]
-    ;;TODO convert percentiles to dates
+    ;;TODO convert percentiles to dates instead of strings (strings are used to take the formatting away from the caller)
     (update-vals #(->> %
                       t/days
                       (t/plus start-date)
