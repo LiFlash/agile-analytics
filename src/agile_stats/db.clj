@@ -2,11 +2,11 @@
   (:require [agile-stats.utils :refer [update-vals minutes->days]]
             [java-time :as t]))
 
-;; (defn status-times->csv [sprints]
-;;   (let [times (reduce (fn [r sprint]
-;;                         (reduce #(update % (first %2) (fnil conj []) (second %2)) r (:status-times sprint)))
-;;                       {} sprints)]
-;;     (into [] (mapv #(into [(first %)] (second %)) times))))
+(comment
+;;The db is structured like this
+  {:issues {:issuekey1 "Issue as defined in issue.clj"
+            :issuekey2 ""}
+   :last-update-date "Is set, when the db is persisted"})
 
 (defn status-times->csv [sprints]
   (let [times (reduce (fn [r sprint]
@@ -61,7 +61,7 @@
         row-fn (fn [issues]
                  (let [sorted (sort-by age-fn issues)]
                    (map #(str (:key %)
-;                              ", " (:summary %)
+                  ;            ", " (:summary %)
                               ", "(age-fn %)) sorted)))]
     (into []
           (map #(into [(first %)] (row-fn (second %))) ages))))

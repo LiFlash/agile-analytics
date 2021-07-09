@@ -4,22 +4,25 @@
              :refer [histogram->csv
                      load-db
                      persist-issues
+                     persist-db
                      sprints->csv
                      percentiles->csv
                      status-ages->csv
                      csv-transpose]]
             [agile-stats.issue :refer [finished-issues group-by-sprints]]
-            [agile-stats.jira :refer [get-issues jql-query]]
+            [agile-stats.jira :refer [get-issues jql-query update-details]]
             [agile-stats.metrics
              :refer [ct-histogram
                      cycle-time-stats
                      status-time-stats
                      status-hop-stats
+                     detailed-hops
                      ct-percentiles
                      status-ages
                      throughput-per-day
                      monte-carlo-issues
-                     monte-carlo-time]]
+                     monte-carlo-time
+                     ]]
             [agile-stats.utils
              :refer [update-vals
                      cleanup-map
@@ -36,14 +39,21 @@
         renew-db (:renew-db configs)
         change-date (if renew-db update-date (or last-update-date update-date))
         issues (into (or (when-not renew-db issues) {})
-                     (-> (str base-url jql-query issue-query)
-                         (get-issues update-date change-date)
+                     (-> base-url
+                         (get-issues issue-query update-date change-date)
                          (vec->map :key)))]
     (persist-issues configs issues)))
 
-(defn- filter-by-status
-  [statuses issues]
-  (filter #(statuses (:status %)) issues))
+(defn refresh-issue-details [configs]
+  (let [db (load-db configs)
+        issues (->> db
+                   :issues
+                   vals
+                   (update-details (:base-url configs)))
+        issues (vec->map issues :key)]
+    (->> issues
+         (assoc db :issues)
+         (persist-db configs))))
 
 (defn- sprints
   [sprint-end-date nr-sprints sprint-length finished wip-statuses]
@@ -86,7 +96,8 @@
     (days-in-statuses ["bla" "blub"][{:to "bla" :date (t/offset-date-time 2021 1 1)}
                                      {:to "foo" :date (t/offset-date-time 2021 1 2)}
                                      {:to "blub" :date (t/offset-date-time 2021 1 3)}
-                                     {:to "foo" :date (t/offset-date-time 2021 1 4)}])))
+                                     {:to "foo" :date (t/offset-date-time 2021 1 4)}
+                                     {:to "bla" :date (t/minus (t/offset-date-time) (t/days 2))}])))
 
 (defn wip-size-per-day [wip-statuses issues]
   (reduce #(let [days (days-in-statuses wip-statuses (:transitions %2))]
@@ -125,7 +136,7 @@
                                            ct-percentiles
                                            (update-vals minutes->days)))
         wip-age (->> issues
-                     (filter-by-status wip-statuses)
+                     (filter #(wip-statuses (:status %)))
                      (status-ages wip-statuses)
                      (status-ages->csv))
         done-issues (->> sprints
@@ -137,13 +148,17 @@
                          (map #(str (:key %)
                                         ;", " (:summary %)
                                     ", " (minutes->days (get-in % [:stats :age])))))
-        blocked (reduce #(str % "," (:key %2)
-                              ": " (get-in [:stats :status-times "Blocked" :duration] %2)) ""
-                        (filter #(and (:done-date %)
-                                      (t/after? (t/minus (t/offset-date-time) (t/weeks 2)) (:done-date %))
-                                      (get-in % [:stats :status-times "Blocked"]))
-                                finished))
-        ref-throughput (throughput-per-day  (t/minus (t/offset-date-time) (t/weeks 14)) (t/offset-date-time) finished)
+        blocked (->> finished
+                     (filter #(and (:done-date %)
+                                   (t/before? (t/minus (t/offset-date-time) (t/weeks 8)) (:done-date %))
+                                   (get-in % [:stats :status-times "Blocked"])))
+                     (reduce #(-> [(str (first %) "," (:key %2)
+                                        ": " (-> %2
+                                                 (get-in [:stats :status-times "Blocked" :duration])
+                                                 minutes->days))
+                                   (str (second %) ","(:key %2))])
+                             ["" ""]))
+        ref-throughput (throughput-per-day (t/minus (t/offset-date-time) (t/weeks 14)) (t/offset-date-time) finished)
         nr-issues 40
         mc-issues (->> ref-throughput
                        (monte-carlo-issues 14)
@@ -151,20 +166,31 @@
         mc-time (->> ref-throughput
                      (monte-carlo-time nr-issues (t/offset-date-time))
                      (percentiles->csv))
-        hist (histogram->csv (ct-histogram finished))
         wip-size (csv-transpose (into (sorted-map-by t/before?)
                                       (filter #(t/before? (t/local-date 2021 1 1) (key %))
                                               (wip-size-per-day wip-statuses issues)))
-                                {:format-first #(t/format "YYYY-MM-dd" %)})]
+                                {:format-first #(t/format "YYYY-MM-dd" %)})
+        hop-details (->> finished
+                         (filter #(let [value  (get-in % [:stats :ct])
+                                        days (if value
+                                               (agile-stats.utils/minutes->days value) 0) ]
+                                    (and (> days 7)
+                                         (t/after? (:done-date %) (t/offset-date-time 2021 3 1)))))
+                         detailed-hops
+                         (reduce #(-> %
+                                      (conj [])
+                                      (conj (select-vals %2 [:key :summary :ct :estimate]) ;(butlast (butlast %2))
+                                            )
+                                      (conj (:durations %2))
+                                      (into (:hops %2))) []))
+        hist (histogram->csv (ct-histogram finished))]
     (with-open [writer (clojure.java.io/writer stats-file)]
       (csv/write-csv writer (-> []
-                                ;; (into [["Blocked"
-                                ;;         blocked]])
+                                ;(into [(into ["Blocked"] blocked)])
                                 (into [(into ["Done last sprint"] done-issues)])
+;                                (into (vec (update-vals count (group-by :issuetype (-> sprints last :issues)))))
                                 (into [[""]])
                                 (into csv-sprints)
-                                (into [[""][""] ["Status hops"]])
-                                (into status-hops)
                                 (into [[""]["Cycle Time Percentiles (days)"]])
                                 (into percentiles)
                                 (into [[""]["Monte Carlo Issue Count (14 days)"]])
@@ -175,6 +201,10 @@
                                 (into wip-age)
                                 (into [[""] ["WIP-Size"]])
                                 (into wip-size)
+                                (into [[""][""] ["Status hops"]])
+                                (into status-hops)
+                                (into [[""]["Status hops details"]])
+                                (into hop-details)
                                 (into [[""] [""] ["Cycle Time Histogram"]])
                                 (into hist))))))
 

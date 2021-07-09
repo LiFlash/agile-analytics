@@ -1,6 +1,15 @@
 (ns agile-stats.metrics
-  (:require [agile-stats.issue :refer [status-times update-cycle-time status-hops cycle-time update-age]]
-            [agile-stats.utils :refer [update-vals]]
+  (:require agile-stats.configs
+            [agile-stats.issue
+             :refer
+             [status-durations
+              status-visits
+              status-hops
+              status-times
+              update-age
+              update-cycle-time]]
+            [agile-stats.utils :refer [update-vals select-vals]]
+            [clojure.data.csv :as csv]
             [java-time :as t]))
 
 (defn avg [vs]
@@ -44,15 +53,17 @@
        status-times
        (update-vals stats)))
 
+;; (status-time-stats [{:stats {:status-times {:ip {:duration 4}
+;;                                             :review {:duration 2}}}}
+;;                {:stats {:status-times {:ip {:duration 5}
+;;                                        :review {:duration 11}}}}])
+
+
 (defn status-hop-stats
   [issues]
   (->> issues
        status-hops
        (update-vals stats)))
-;; (status-time-stats [{:stats {:status-times {:ip {:duration 4}
-;;                                             :review {:duration 2}}}}
-;;                {:stats {:status-times {:ip {:duration 5}
-;;                                        :review {:duration 11}}}}])
 
 (defn ct-histogram [issues]
   (let [hist (group-by #(Math/round (/ (get-in % [:stats :ct]) 60 24.0)) issues)
@@ -146,3 +157,12 @@
                  p)))
 
 ;(monte-carlo-time 10 (t/offset-date-time) [5 1 1 3 2 1 2 5 3])
+
+(defn detailed-hops [issues]
+  (map #(-> {:key (:key %)
+             :summary (:summary %)
+             :ct (str "ct: " (agile-stats.utils/minutes->days (get-in % [:stats :ct])) 0)
+             :estimate (str "estimate: " (:estimate %))
+             :durations (status-durations %)
+             :hops (status-visits %)})
+       issues))

@@ -1,15 +1,19 @@
 (ns agile-stats.issue
-  (:require [agile-stats.utils :refer [select-vals update-vals]]
+  (:require [agile-stats.configs :refer [status-categories]]
+            [agile-stats.utils :refer [select-vals update-vals]]
             [java-time :as t]))
 
 ;; Bsp. Issue
 (comment
-  {:self <weblink to jira>
+  {:self <weblink to the jira issue>
    :key "BSP-001"
+   :issuetype "Type of the issue"
+   :summary "Issue summary"
    :created-date :date-of-creation
-   :created-status :initial-status
+   :created-status :initial-status ;;TODO Find out the correct one. Currently we assume it's always "To be defined"
    :status :current-status
    :done-date :date-of-finishing-work
+   :estimate "Original Estimate"
    :transitions [{:from :some-status
                   :to :another-status
                   :date :date-of-transition}]
@@ -20,7 +24,6 @@
            :ct "cumulated time in a given set of statuses"}})
 
 (defn done-date [done-statuses issue]
-  ;;TODO Abstrahieren: Funktioniert fuer jede Statuskategorie
   ;;TODO Kann performanter gemacht werden, wenn die :stats eines issues vorausgesetzt werden
   (when (get done-statuses (:status issue))
     (->> issue
@@ -50,8 +53,7 @@
 
 (defmethod status-times true
   [issue]
-  ;;TODO Refactor loop -> reduce
-  ;;TODO refactor input param to be transitions not a hole issue
+  ;;TODO refactor input param to be transitions not a whole issue
   (let [{:keys [created-status created-date transitions]} issue]
     (loop [transitions transitions
            last-date created-date
@@ -168,3 +170,36 @@
 
 (defn update-age [statuses issue]
   (assoc-in issue [:stats :age] (age statuses issue)))
+
+(defn status-durations [issue]
+  ;;TODO extract statuses as a parameter
+  ;;TODO remove conversion to days
+  ;;TODO remove the filtering for durations > 1 day. This should be done by the caller, if he is only interested in those
+  (->> [:stats :status-times]
+       (get-in issue)
+       (filter #(and (->> %
+                          key
+                          (contains? (:wip agile-stats.configs/status-categories)))
+                     (->> %
+                          val
+                          :duration
+                          agile-stats.utils/minutes->days
+                          (< 1))))
+       (map #(str (key %) ": " (-> %
+                                   val
+                                   :duration
+                                   agile-stats.utils/minutes->days)))))
+
+(defn status-visits [issue]
+  ;;TODO remove optimization for CSV, like date string and conversion to days instead of minutes
+  (let [hops (:transitions issue)]
+    (last (reduce (fn [[last-hop hops] hop]
+                    (if last-hop
+                      (let [status (:to last-hop)
+                            date (:date last-hop)
+                            duration (-> date
+                                         (t/time-between (:date hop) :minutes)
+                                         agile-stats.utils/minutes->days)]
+                        [hop ((fnil conj []) hops [(str (t/format "dd.MM.YY HH:mm: " date)) status duration])])
+                      [hop]))
+                  [] hops))))
