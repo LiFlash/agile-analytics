@@ -1,6 +1,6 @@
 # Agile Analytics
 
-FIXME: description
+FIXME: descriptions
 
 ## Installation
 
