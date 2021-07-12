@@ -229,10 +229,10 @@
                    vals)
         finished (finished-issues issues update-date)
         percentiles (percentiles->csv (->> finished
-                                            ct-percentiles
-                                            (update-vals minutes->days)))
-        percentiles (map #(let [before-date (t/minus sprint-end-date (t/days (* % 14)))
-                                after-date (t/minus before-date (t/weeks 15))
+                                           ct-percentiles
+                                           (update-vals minutes->days)))
+        percentiles (map #(let [before-date (t/minus sprint-end-date (t/days (* % sprint-length)))
+                                after-date (t/minus before-date (t/weeks 8))
                                 finished (finished-issues issues after-date before-date)]
                             [before-date (second (percentiles->csv (->> finished
                                                                         ct-percentiles
