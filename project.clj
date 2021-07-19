@@ -11,6 +11,6 @@
                  [org.clojure/tools.cli "0.4.1"]
                  [org.clojure/tools.reader "1.3.4"]
                  [cheshire "5.10.0"]]
-  :main ^:skip-aot agile-stats.core
+  :main ^:skip-aot agile-stats.cli
   :target-path "target/%s"
   :profiles {:uberjar {:aot :all}})

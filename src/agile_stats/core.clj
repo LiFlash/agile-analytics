@@ -9,7 +9,7 @@
                      percentiles->csv
                      status-ages->csv
                      csv-transpose]]
-            [agile-stats.issue :refer [finished-issues group-by-sprints]]
+            [agile-stats.issue :refer [finished-issues group-by-sprints update-issue-stats]]
             [agile-stats.jira :refer [get-issues jql-query update-details]]
             [agile-stats.metrics
              :refer [ct-histogram
@@ -119,12 +119,18 @@
                        {:to "foo" :date (t/offset-date-time 2021 1 5)}]}]))
 
 (defn update-stats [configs]
-  (let [{:keys [sprint-end-date sprint-length nr-sprints stats-file update-date]} configs
+  (let [{:keys [sprint-end-date sprint-length nr-sprints stats-file update-date mc-nr-issues mc-days]
+         :or {sprint-length 2
+              nr-sprints 8
+              sprint-end-date (t/offset-date-time)}} configs
+        weeks-back (* nr-sprints sprint-length)
+        update-date (or update-date (t/minus sprint-end-date (t/weeks weeks-back)))
         wip-statuses (:wip status-categories)
-        issues (-> configs
-                   update-issue-db
-                   :issues
-                   vals)
+        issues (map (partial update-issue-stats status-categories)
+                    (-> configs
+                        update-issue-db
+                        :issues
+                        vals))
         finished (finished-issues issues update-date)
         sprints  (sprints sprint-end-date nr-sprints sprint-length finished wip-statuses)
         csv-sprints (sprints->csv sprints)
@@ -150,7 +156,8 @@
                                     ", " (minutes->days (get-in % [:stats :age])))))
         blocked (->> finished
                      (filter #(and (:done-date %)
-                                   (t/before? (t/minus (t/offset-date-time) (t/weeks 8)) (:done-date %))
+                                   (t/before? update-date
+                                              (:done-date %))
                                    (get-in % [:stats :status-times "Blocked"])))
                      (reduce #(-> [(str (first %) "," (:key %2)
                                         ": " (-> %2
@@ -158,16 +165,17 @@
                                                  minutes->days))
                                    (str (second %) ","(:key %2))])
                              ["" ""]))
-        ref-throughput (throughput-per-day (t/minus (t/offset-date-time) (t/weeks 14)) (t/offset-date-time) finished)
-        nr-issues 40
-        mc-issues (->> ref-throughput
-                       (monte-carlo-issues 14)
-                       percentiles->csv)
-        mc-time (->> ref-throughput
-                     (monte-carlo-time nr-issues (t/offset-date-time))
-                     (percentiles->csv))
+        ref-throughput (throughput-per-day update-date (t/offset-date-time) finished)
+        mc-issues (when mc-days
+                    (->> ref-throughput
+                         (monte-carlo-issues mc-days)
+                         percentiles->csv))
+        mc-time (when mc-nr-issues
+                  (->> ref-throughput
+                       (monte-carlo-time mc-nr-issues (t/offset-date-time))
+                       (percentiles->csv)))
         wip-size (csv-transpose (into (sorted-map-by t/before?)
-                                      (filter #(t/before? (t/local-date 2021 1 1) (key %))
+                                      (filter #(t/before? (t/local-date update-date) (key %))
                                               (wip-size-per-day wip-statuses issues)))
                                 {:format-first #(t/format "YYYY-MM-dd" %)})
         hop-details (->> finished
@@ -193,10 +201,10 @@
                                 (into csv-sprints)
                                 (into [[""]["Cycle Time Percentiles (days)"]])
                                 (into percentiles)
-                                (into [[""]["Monte Carlo Issue Count (14 days)"]])
-                                (into mc-issues)
-                                (into [[""][(str "Monte Carlo Done dates for " nr-issues " issues")]])
-                                (into mc-time)
+                                (into (when mc-days[[""] [(str "Monte Carlo Issue Count (" mc-days " days)")]]))
+                                (into (when mc-days mc-issues))
+                                (into (when mc-nr-issues [[""][(str "Monte Carlo Done dates for " mc-nr-issues " issues")]]))
+                                (into (when mc-nr-issues mc-time))
                                 (into [[""] [""] ["WIP Age"]])
                                 (into wip-age)
                                 (into [[""] ["WIP-Size"]])

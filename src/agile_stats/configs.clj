@@ -23,15 +23,37 @@
               :base-url "https://digistore.atlassian.net"
               :issue-query "project = DS AND issuetype = Bug AND labels in (DS_Frontend,DS_Backend) AND labels not in (nf)"})
 
-(def cch { ;:renew-db true
-          :sprint-end-date (t/offset-date-time 2021 6 22)
+(def cch { ;renew-db true
+          :sprint-end-date (t/offset-date-time 2021 7 20)
           :sprint-length 2
           :nr-sprints 6
+          :mc-days 14
+          :mc-nr-issues 40
           :update-date (t/offset-date-time 2021 4 1) ;(t/minus (t/offset-date-time) (t/weeks 15))
           :storage-file "cch-issues.edn"
           :stats-file "cch-stats.csv"
           :base-url "https://digistore.atlassian.net"
           :issue-query "project in (OCB,PGB) AND issuetype in (Task, Story) AND (labels is empty or labels not in (nf))"})
+
+(def cch-fe-be { ;:renew-db true
+          :sprint-end-date (t/offset-date-time 2021 7 20)
+          :sprint-length 2
+          :nr-sprints 6
+          :update-date (t/offset-date-time 2021 4 1) ;(t/minus (t/offset-date-time) (t/weeks 15))
+          :storage-file "cch-issues-fe-be.edn"
+          :stats-file "cch-stats-fe-be.csv"
+          :base-url "https://digistore.atlassian.net"
+          :issue-query "project in (OCB,PGB) AND issuetype in (Task, Story)AND labels = frontend and labels = backend AND (labels is empty or labels not in (nf))"})
+
+(def cch-issue-owner { :renew-db true
+                :sprint-end-date (t/offset-date-time 2021 7 20)
+                :sprint-length 2
+                :nr-sprints 6
+                :update-date (t/offset-date-time 2021 6 8) ;(t/minus (t/offset-date-time) (t/weeks 15))
+                :storage-file "cch-issues-issue-owner.edn"
+                :stats-file "cch-stats-issue-owner.csv"
+                :base-url "https://digistore.atlassian.net"
+                :issue-query "project in (OCB,PGB) AND issuetype in (Task, Story) AND labels in (cch-rocket) and (labels is empty or labels not in (nf))"})
 
 (def oma { ;:renew-db true
           :sprint-end-date (t/offset-date-time 2021 6 8)

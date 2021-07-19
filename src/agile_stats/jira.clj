@@ -130,5 +130,4 @@
         issues (jira-paginate query)]
     (->> issues
          parse-issues
-         get-transitions
-         (map (partial update-issue-stats status-categories)))))
+         get-transitions)))
