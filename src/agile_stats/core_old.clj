@@ -395,7 +395,7 @@ improvements for making the future more predictable."
             months)))
 
 
-(def stories (read-stories "/home/johannes/Downloads/Jira (1).csv" "dd/MMM/yy"))
+;(def stories (read-stories "/home/johannes/Downloads/Jira (1).csv" "dd/MMM/yy"))
 
 ;(est-backlog-size stories (time/local-date 2021 1 15) 3)
 
@@ -403,10 +403,10 @@ improvements for making the future more predictable."
 
 ;; (burndown 50 10 1 (time/local-date))
 
-(write-stats "/home/johannes/gdrive/DS24/ds-stats-bugs.csv" (rolling-values ;(apply-filters stories [estimated?])
-                                            stories
-                                            (time/local-date 2021 1 15)
-                                            30 2))
+;; (write-stats "/home/johannes/gdrive/DS24/ds-stats-bugs.csv" (rolling-values ;(apply-filters stories [estimated?])
+;;                                             stories
+;;                                             (time/local-date 2021 1 15)
+;;                                             30 2))
 
 (defn start [args]
   (let [{:keys [in-file out-file options exit-message ok?]} (validate-args args)]

@@ -1,6 +1,5 @@
 (ns agile-stats.issue
-  (:require [agile-stats.configs :refer [status-categories]]
-            [agile-stats.utils :refer [select-vals update-vals]]
+  (:require [agile-stats.utils :refer [select-vals update-vals]]
             [java-time :as t]))
 
 ;; Bsp. Issue
@@ -171,7 +170,7 @@
 (defn update-age [statuses issue]
   (assoc-in issue [:stats :age] (age statuses issue)))
 
-(defn status-durations [issue]
+(defn status-durations [statuses issue]
   ;;TODO extract statuses as a parameter
   ;;TODO remove conversion to days
   ;;TODO remove the filtering for durations > 1 day. This should be done by the caller, if he is only interested in those
@@ -179,7 +178,7 @@
        (get-in issue)
        (filter #(and (->> %
                           key
-                          (contains? (:wip agile-stats.configs/status-categories)))
+                          (contains? statuses))
                      (->> %
                           val
                           :duration

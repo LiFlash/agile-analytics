@@ -1,26 +1,29 @@
 (ns agile-stats.jira
-  (:require [agile-stats.configs :refer [status-categories]]
-            [agile-stats.issue :refer [update-issue-stats]]
+  (:require [agile-stats.issue :refer [update-issue-stats]]
             [agile-stats.utils :refer [vec->map]]
             [clj-http.client :as client]
             [java-time :as t]))
 
 (def jql-query "/rest/api/2/search?jql=")
-
+(def issue-api "/rest/api/2/issue/")
 (def issue-fields "&fields=created,status,summary,timetracking")
 
 (defn issue-query [base-url query]
   (str base-url jql-query query issue-fields))
 
-(defn jira-get [query]
-;  (println query)
+(defn jira-get [auth query]
+;  (println auth)
   (:body (client/get query
-                     {:basic-auth ["johannes.graessler@digistore24.team" "pVcDoBNcl82d8i0rYSjI2033"]
+                     {:basic-auth [(:user auth) (:token auth)
+                                   ;"johannes.graessler@digistore24.team" "pVcDoBNcl82d8i0rYSjI2033"
+                                   ]
                       :accept :json
                       :as :json})))
 
-(defn jira-put [url body]
-  (:body (client/put url {:basic-auth ["johannes.graessler@digistore24.team" "pVcDoBNcl82d8i0rYSjI2033"]
+(defn jira-put [auth url body]
+  (:body (client/put url {:basic-auth [(:user auth) (:token auth)
+                                       ;"johannes.graessler@digistore24.team" "pVcDoBNcl82d8i0rYSjI2033"
+                                       ]
                           :content-type :json
                           :form-params body})))
 
@@ -31,17 +34,19 @@
   (let [appender (if (.contains query "?") "&" "?")]
     (str query appender "startAt=" (+ startAt maxResults))))
 
-(defn jira-paginate [query]
+(defn jira-paginate [auth query]
   (loop [current-query query
          values []]
-    (let [resp (jira-get current-query)
+    (let [resp (jira-get auth current-query)
           values (into values (or (:issues resp) (:values resp)))]
       (if (not (isLast? resp))
         (recur (nextPage query resp) values)
         values))))
 
-(defn jira-changelog [issue-key]
-  (jira-paginate (str "https://digistore.atlassian.net/rest/api/2/issue/" issue-key "/changelog")))
+(defn jira-changelog [base-url auth issue-key]
+  (let [query (str base-url issue-api issue-key "/changelog")]
+    ;(println query)
+    (jira-paginate auth query )))
 
 (defn adjust-date-string [s]
   (let [index 26]
@@ -95,10 +100,10 @@
 
 (defn get-transitions
   "Loads the changelog from jira, extracts the tranisitions for each issue and adds them in :transitions"
-  [issues]
+  [base-url auth issues]
   (map #(assoc % :transitions (->> %
                                    :key
-                                   jira-changelog
+                                   (jira-changelog base-url auth)
                                    transition-entries
                                    (sort-by :date t/before?)))
        issues))
@@ -119,7 +124,7 @@
          (merge-with into issue-map)
          vals)))
 
-(defn get-issues [base-url query & [done-after-date update-date]]
+(defn get-issues [base-url auth query & [done-after-date update-date]]
   (let [format-date (partial t/format "YYYY-MM-dd")
         query (issue-query base-url (str query
                                         (when done-after-date
@@ -127,7 +132,7 @@
                                         (when update-date
                                           (str " and updated >= " (format-date update-date)))))
         _ (println "query: " query)
-        issues (jira-paginate query)]
+        issues (jira-paginate auth query)]
     (->> issues
          parse-issues
-         get-transitions)))
+         (get-transitions base-url auth))))

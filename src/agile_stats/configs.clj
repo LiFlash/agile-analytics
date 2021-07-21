@@ -67,6 +67,6 @@
 
 (def base-url "https://digistore.atlassian.net/rest/api/2/")
 
-(def status-categories {:todo #{"To Do" "Dependent" "Can be groomed" "To be defined" "Selected for dev"}
+(def status-categorie {:todo #{"To Do" "Dependent" "Can be groomed" "To be defined" "Selected for dev"}
                         :wip #{"Blocked" "To Be Fixed" "Design Review" "In Progress" "R4 Code Review" "Code Review" "R4 Testing" "Testing" "R4 Merge" "Approval" "Merge" "R4 Release" "Release"}
                         :done #{"Done"}})

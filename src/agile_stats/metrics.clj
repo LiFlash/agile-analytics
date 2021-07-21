@@ -158,11 +158,11 @@
 
 ;(monte-carlo-time 10 (t/offset-date-time) [5 1 1 3 2 1 2 5 3])
 
-(defn detailed-hops [issues]
+(defn detailed-hops [statuses issues]
   (map #(-> {:key (:key %)
              :summary (:summary %)
              :ct (str "ct: " (agile-stats.utils/minutes->days (get-in % [:stats :ct])) 0)
              :estimate (str "estimate: " (:estimate %))
-             :durations (status-durations %)
+             :durations (status-durations statuses %)
              :hops (status-visits %)})
        issues))

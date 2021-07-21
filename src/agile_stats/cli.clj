@@ -2,6 +2,7 @@
   (:gen-class)
   (:require [clojure.data.csv :as csv]
             [java-time :as time]
+            [agile-stats.core :as core]
             [clojure.string :as string]
             [clojure.tools.cli :refer [parse-opts]]
             [java-time :as t]))
@@ -27,23 +28,34 @@
   (->> ["Agile Stats: Uses your existing backlog to help analyzing the past and to find
 improvements for making the future more predictable."
         ""
-        "Usage: astats [options] input-file output-file"
+        ;"Usage: agile-stats [options] config-file config"
+        "Usage: agile-stats config-file config"
         ""
-        "Input-file is a .csv file containing the following columns in this order:"
-        "Issue Type, Issue Key, Issue Id, Summary, Story Points, Created (Date), Resolved (Date), Status"
-        ""
-        "The output is a .csv file containing the following values for every sprint:"
-        "  Rolling Avg. Story Size - Avg. size (story points) of all stories resolved in the month before"
-        "  Calculated Backlog Size  - Nr. of known issues multiplied by the average story size"
-        "  Actual Backlog Size     - Sum of story points for stories that were already known (created before) and are estimated by today"
-        "  Backlog Size by Today   - Sum of all story points that were estimated after the given sprint date. This also includes stories that were not created at a given date but are known today."
-        "  #Open Issues            - Nr. of known open issues"
-        "  Rolling Velocity        - Avg. velocity for the last three sprints"
-        "  Current Velocity        - Actual Velocity in the last sprint"
-        "  Burndowns               - Burndown for each sprint using the calculated backlog size and average velocity"
-        ""
-        "Options:"
-        options-summary]
+        "Config-file is an .edn file containing the configs to analyze one or more projects. All parameters can be given outside of a concrete config key and will be used as defaults"
+        "An example config-file can look like this:"
+        "{\"Config Key\" { "
+        "   :sprint-end-date <End of the last iteration to calculate the stats for. Format: yyyy-MM-dd>"
+        "   :storage-file <cache file to store the jira issue details in>"
+        "   :stats-file <output .csv file to write the stats into>"
+        "   :renew-db <clear cache and load everything from jira>"
+        "   :mc-nr-issues <Nr of issues to calculate monte carlo percentiles for(when will they be done?)>"
+        "   :mc-days <Nr of days to calculate the monte carlo percentiles for (how many issues will be done?)>"
+        "   :issue-query <jql query to filter for the relevant issues,e.g.\"project=xxxx and issuetype=story\" " "project = DS AND type not in (\"Test Execution\",
+ \"Test Plan\", \"Test Set\", \"Xray Test\",
+ \"Sub Test Execution\", Precondition, Sub-Bug, Sub-Task, Epic, Bug) AND labels in (DS_Frontend,DS_Backend) AND labels not in (nf)"
+        "   }"
+        ":base-url <basic url to the jira instance> e.g. \"https://xxxxx.atlassian.net\""
+        ":basic-auth {"
+        "   :user <login name for jira instance>"
+        "   :token <jira token to authorize with"
+        "   }"
+        ":sprint-length <number of weeks per iteration>"
+        ":nr-sprints <nr of sprints to go back (starting from sprint-end-date)"
+        "}"
+;;        ""
+;;        "Options:"
+;;        options-summary
+        ]
        (string/join \newline)))
 
 (defn error-msg [errors]
@@ -79,12 +91,16 @@ improvements for making the future more predictable."
       (exit (if ok? 0 1) exit-message)
       (let [configs (clojure.edn/read-string
                      (slurp config-file))
-            config (get configs config)
+            global-params (select-keys configs [:base-url :basic-auth :sprint-end-date
+                                        :storage-file :stats-file :mc-nr-issues
+                                        :mc-nr-days :issue-query :renew-db :status-categories])
+            config (merge global-params (get configs config))
             end-date (time/local-date (:sprint-end-date config))
             end-date (apply time/offset-date-time (time/as end-date :year :month-of-year :day-of-month))
             config (assoc config :sprint-end-date end-date)]
         (println (get configs config))
-        (agile-stats.core/update-stats config))
+        (core/update-stats config)
+        )
       ;; (let [{:keys [date-format last-sprint-date sprint-length nr-of-sprints]} options
       ;;       ;stories nil;(read-stories in-file date-format)
       ;;       ;stats ;; (rolling-values stories
