@@ -87,7 +87,9 @@
        (percentiles [50 75 85 95])))
 
 (defn status-ages [statuses issues]
-  (group-by :status (map (partial update-age statuses) issues)))
+  (->> issues
+       (map (partial update-age statuses))
+       (group-by :status)))
 
 
 (defn throughput-per-day

@@ -117,6 +117,16 @@
                        {:to "blub" :date (t/offset-date-time 2021 1 4)}
                        {:to "foo" :date (t/offset-date-time 2021 1 5)}]}]))
 
+(defn- summary-strings
+  [wip-statuses issues]
+  (->> issues
+       (status-ages wip-statuses)
+       vals flatten
+       (sort-by #(get-in % [:stats :age]))
+       (map #(str (:key %)
+                                        ;", " (:summary %)
+                  ", " (minutes->days (get-in % [:stats :age]))))))
+
 (defn update-stats [configs]
   (let [{:keys [sprint-end-date sprint-length nr-sprints stats-file update-date mc-nr-issues mc-days status-categories]
          :or {sprint-length 2
@@ -144,15 +154,11 @@
                      (filter #(wip-statuses (:status %)))
                      (status-ages wip-statuses)
                      (status-ages->csv))
-        done-issues (->> sprints
-                         last
-                         :issues
-                         (status-ages wip-statuses)
-                         vals flatten
-                         (sort-by #(get-in % [:stats :age]))
-                         (map #(str (:key %)
-                                        ;", " (:summary %)
-                                    ", " (minutes->days (get-in % [:stats :age])))))
+        done-issues (map #(->> %
+                               :issues
+                               (summary-strings wip-statuses)
+                               (into [(t/format "YYYY-MM-dd" (:end-date %))]))
+                         sprints)
         blocked (->> finished
                      (filter #(and (:done-date %)
                                    (t/before? update-date
@@ -194,7 +200,8 @@
     (with-open [writer (clojure.java.io/writer stats-file)]
       (csv/write-csv writer (-> []
                                 ;(into [(into ["Blocked"] blocked)])
-                                (into [(into ["Done last sprint"] done-issues)])
+                                (into [["Done per sprint"]])
+                                (into done-issues)
 ;                                (into (vec (update-vals count (group-by :issuetype (-> sprints last :issues)))))
                                 (into [[""]])
                                 (into csv-sprints)
